@@ -2,10 +2,8 @@
 #include <vector>
 #include <unistd.h>
 #include <pthread.h>
+#include <string.h>
 #include "ex3.h"
-
-#define DONE "DONE"
-#define NUM_CO_EDITORS 3
 
 // Reads the configuration file, create the list of producers and return the number of Co-Editors.
 int readConfigurationFile(std::vector<Producer*> &producers, char* path, int &semaphores) {
@@ -26,7 +24,7 @@ int readConfigurationFile(std::vector<Producer*> &producers, char* path, int &se
         producerNumber = std::stoi(line);
         getline(&line, &len, f);
 
-        // If the second line is empty so we finished read the file and the last line was the Co-Editor queue size.
+        // If the second line is empty, so we finished read the file and the last line was the Co-Editor queue size.
         if (strcmp(line, "\n") == 0) {
             break;
         }
@@ -81,14 +79,15 @@ void *runDispatcher(void *dispatcher) {
         }
 
         // Check the producer still creates strings.
-        else if (finishedProducers[current])
+        if (finishedProducers[current]) {
             continue;
+        }
 
         // Get the next string from the producer's queue.
         std::string str = d->_producers[current]->_buffer->remove();
 
         // If the queue is empty, continue to the next producer.
-        if (str == "-1")
+        if (str == "empty")
             continue;
 
         // When the producer finish change the value in the compatible index in the array and add 1 to the counter.
@@ -126,7 +125,7 @@ void *runCoEditor(void* coEditor) {
         usleep(50000);
 
         // Check the queue is not empty.
-        if (str == "-1") {
+        if (str == "empty") {
             continue;
         }
 
@@ -148,34 +147,35 @@ void *runCoEditor(void* coEditor) {
 }
 
 // Get each string from the co-editors shared queue and print it.
-void ScreenManager(BoundedBuffer *coEditorsSharedQueue) {
+void runScreenManager(BoundedBuffer *coEditorsSharedQueue) {
     int count = 0;
 
     // Get strings until we get "DONE" from all the co-editors.
     while (count != NUM_CO_EDITORS) {
-        std::string message = coEditorsSharedQueue->remove();
+        std::string m = coEditorsSharedQueue->remove();
 
         // Check the queue is not empty.
-        if (message == "-1")
+        if (m == "empty")
             continue;
 
         // Count the number of finished co-editors.
-        if (message == DONE) {
+        if (m == DONE) {
             count++;
             continue;
         }
-        std::cout << message << std::endl;
+        std::cout << m << std::endl;
     }
 }
 
 int main(int argc, char** argv) {
+
     // Checks there are 2 arguments.
     if (argc != 2) {
         return -1;
     }
 
-    int semaphores = 0, i;
     std::vector<Producer*> producers;
+    int semaphores = 0, i;
 
     // Reads the configuration file.
     int bufferSize = readConfigurationFile(producers, argv[1], semaphores);
@@ -203,17 +203,20 @@ int main(int argc, char** argv) {
     }
 
     // Create threads for each of the producers, dispatcher and co-editors
-    for (i = 0; i < numberOfProducers; i++)
-        if (pthread_create(&producerThread[i], NULL, runProducer, (void *) producers[i]) != 0)
-            exit(1);
     if (pthread_create(&dispatcherThread, NULL, runDispatcher, (void *) dispatcher) != 0) {
         exit(1);
     }
-    for (i = 0; i < NUM_CO_EDITORS; i++) {
-        if (pthread_create(&coEditorThread[i], NULL, runCoEditor, (void *) coEditors[i]) != 0)
+    for (i = 0; i < numberOfProducers; i++) {
+        if (pthread_create(&producerThread[i], NULL, runProducer, (void *) producers[i]) != 0) {
             exit(1);
+        }
+    }
+    for (i = 0; i < NUM_CO_EDITORS; i++) {
+        if (pthread_create(&coEditorThread[i], NULL, runCoEditor, (void *) coEditors[i]) != 0) {
+            exit(1);
+        }
     }
 
-    ScreenManager(coEditorsSharedQueue);
+    runScreenManager(coEditorsSharedQueue);
     return 0;
 }

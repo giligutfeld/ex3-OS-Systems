@@ -9,13 +9,14 @@
 #include <random>
 #include <sys/sem.h>
 
-/*
+#define DONE "DONE"
+#define NUM_CO_EDITORS 3
+
 union semun {
     int val;	            // value for SETVAL
     struct semid_ds *buf;	// for IPC_STAT, IPC_SET
     unsigned short *array;	// array for GETALL, SETALL
 };
-*/
 
 class UnBoundedBuffer : public std::queue<std::string> {
 
@@ -60,7 +61,7 @@ public:
 
         // If the queue is empty return -1
         if (queue<std::string>::empty()) {
-            string = "-1";
+            string = "empty";
         } else {
             string = queue<std::string>::front();
             queue<std::string>::pop();
@@ -84,22 +85,24 @@ public:
     // Constructor
     BoundedBuffer(int size, const int num):UnBoundedBuffer(num), _size(size), _current(0){};
 
+    // Check if the buffer is full
     int isFull() const {
         return _size == _current;
     }
 
     void insert(std::string s) {
         // Check the buffer is not full and insert the string to the buffer
-        if (_current == _size)
-            return;
-        _current++;
-        UnBoundedBuffer::insert(s);
+        if (!isFull()) {
+            _current++;
+            UnBoundedBuffer::insert(s);
+        }
     }
 
     std::string remove() {
         // Check the queue isn't empty and remove string from the buffer
-        if (_current > 0)
+        if (_current > 0) {
             _current--;
+        }
         return UnBoundedBuffer::remove();
     }
 };
@@ -129,20 +132,21 @@ public:
     }
 
     int createString() {
-        // If it produced all the products, insert "DONE" and return 0
-        if (_produced == _size) {
-            _buffer->insert("DONE");
-            return 0;
-        }
 
         // Check there is space in the buffer
         if (_buffer->isFull()) {
             return 1;
         }
 
+        // If it produced all the products, insert "DONE" and return 0
+        if (_produced == _size) {
+            _buffer->insert(DONE);
+            return 0;
+        }
+
         // Generate a random type from the categories
-        std::string categories[3] = {"SPORTS", "NEWS", "WEATHER"};
-        std::string type = categories[rand() % 3];
+        std::string categories[NUM_CO_EDITORS] = {"SPORTS", "NEWS", "WEATHER"};
+        std::string type = categories[rand() % NUM_CO_EDITORS];
 
         // Produces a new string and inserts it to the buffer.
         _buffer->insert("producer " + std::to_string(_num) + " " + type + " " + std::to_string(++_produced));
